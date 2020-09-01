@@ -24,8 +24,8 @@ type ScreenLog struct {
 func (sl *ScreenLog) Apply(entry *pb.QEntry) {
 	for _, request := range entry.Requests {
 		fmt.Printf("Applying reqNo=%d with data %s to log\n", request.Request.ReqNo, request.Request.Data)
+		sl.count++
 	}
-	sl.count++
 }
 
 func (sl *ScreenLog) Snap() []byte {
@@ -119,12 +119,12 @@ func main() {
 	// let the links establish first...
 	time.Sleep(2 * time.Second)
 
-	consoleLog := &ScreenLog{}
+	screenLog := &ScreenLog{}
 
 	processor := &sample.SerialProcessor{
 		Link:   t,
 		Hasher: md5.New,
-		Log:    consoleLog,
+		Log:    screenLog,
 		Node:   node,
 	}
 
@@ -160,10 +160,11 @@ func main() {
 			check(err)
 		case actions := <-node.Ready():
 			results := processor.Process(&actions)
-			if consoleLog.count >= msgCount {
-				fmt.Printf("\nDone committing %d requests\n", consoleLog.count)
+			if screenLog.count >= msgCount {
+				fmt.Printf("\nDone committing %d requests\n", screenLog.count)
 				ticker.Stop()
 				close(doneC)
+				return
 			}
 			err := node.AddResults(*results)
 			check(err)
