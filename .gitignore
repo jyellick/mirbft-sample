@@ -1,0 +1,8 @@
+# ignore config
+cryptogen/*.yaml
+
+# ignore binary
+mir-sample
+
+# ignore output dir
+output/

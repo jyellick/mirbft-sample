@@ -44,8 +44,14 @@ github.com/itchyny/gojq v0.11.1/go.mod h1:8MKtgvJwkmRduSuzN25byPdNHfvv6y+/hmOVXe
 github.com/itchyny/timefmt-go v0.1.0/go.mod h1:0osSSCQSASBJMsIZnhAaF1C2fCBTJZXrnj37mG8/c+A=
 github.com/jyellick/mirbft v0.0.0-20200826191457-b45f99f870bc h1:Wetavnp0rtvGxMzFFSw+vtNNNbNFlMffuUjgqqVzjJA=
 github.com/jyellick/mirbft v0.0.0-20200826191457-b45f99f870bc/go.mod h1:MDYMH47aZKa6d5EDQByWtfk9S4K/blgY67BXStO02DE=
+github.com/jyellick/mirbft v0.0.0-20200827044224-a07ea68efd60 h1:hy/Esc/qI7lqj4kOuaXW4CjtnxO/2vTYl3VBL8EaAzw=
+github.com/jyellick/mirbft v0.0.0-20200827044224-a07ea68efd60/go.mod h1:y4rwfTEhigBss2QVaTW3oX+PmGUfK/LDbdZL6rKEP9I=
 github.com/jyellick/mirbft v0.0.0-20200901193913-c4ca26aec57b h1:hTb3pIJ55R/Es/RKrwa1kFtFJ16fsBcwvSECpYKuBSI=
 github.com/jyellick/mirbft v0.0.0-20200901193913-c4ca26aec57b/go.mod h1:m7CafoTeA5m/sClXvgV0cLceSbydjAafxKIaWlkT7Kk=
+github.com/jyellick/mirbft v0.0.0-20200902043752-f4ff8db6609d h1:il/FKvMzSQ5xn2LCM53W9yMOdknOiXdvCRv8KBgPm50=
+github.com/jyellick/mirbft v0.0.0-20200902043752-f4ff8db6609d/go.mod h1:m7CafoTeA5m/sClXvgV0cLceSbydjAafxKIaWlkT7Kk=
+github.com/jyellick/mirbft v0.0.0-20200902161759-402f7a1f0c2d h1:PDrYm9y5TuJ44co1EEehmx0NaOcGlEukTwklazGeJOA=
+github.com/jyellick/mirbft v0.0.0-20200902161759-402f7a1f0c2d/go.mod h1:m7CafoTeA5m/sClXvgV0cLceSbydjAafxKIaWlkT7Kk=
 github.com/kisielk/gotool v1.0.0/go.mod h1:XhKaO+MFFWcvkIS/tQcRk01m1F5IRFswLeQ+oQHNcck=
 github.com/kr/pretty v0.1.0 h1:L/CwN0zerZDmRFUapSPitk6f+Q3+0za1rQkzVuMiMFI=
 github.com/kr/pretty v0.1.0/go.mod h1:dAy3ld7l9f0ibDNOQOHHMYYIIbhfbHSm3C4ZsoJORNo=
@@ -166,6 +172,7 @@ google.golang.org/protobuf v0.0.0-20200221191635-4d8936d0db64/go.mod h1:kwYJMbMJ
 google.golang.org/protobuf v0.0.0-20200228230310-ab0ca4ff8a60/go.mod h1:cfTl7dwQJ+fmap5saPgwCLgHXTUD7jkjRqWcaiX5VyM=
 google.golang.org/protobuf v1.20.1-0.20200309200217-e05f789c0967/go.mod h1:A+miEFZTKqfCUM6K7xSMQL9OKL/b6hQv+e19PK+JZNE=
 google.golang.org/protobuf v1.21.0/go.mod h1:47Nbq4nVaFHyn7ilMalzfO3qCViNmqZ2kzikPIcrTAo=
+google.golang.org/protobuf v1.22.0 h1:cJv5/xdbk1NnMPR1VP9+HU6gupuG9MLBoH1r6RHZ2MY=
 google.golang.org/protobuf v1.22.0/go.mod h1:EGpADcykh3NcUnDUJcl1+ZksZNG86OlYog2l/sGQquU=
 google.golang.org/protobuf v1.23.1-0.20200526195155-81db48ad09cc/go.mod h1:EGpADcykh3NcUnDUJcl1+ZksZNG86OlYog2l/sGQquU=
 google.golang.org/protobuf v1.25.0 h1:Ejskq+SyPohKW+1uil0JJMtmHCgJPJ/qWTxr8qp+R4c=

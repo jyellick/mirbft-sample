@@ -29,7 +29,7 @@ You should now have a `mir-sample` binary in your top level directory.
 ./start.sh
 ```
 
-If all went well, you should now have four `*.log` files, numbered 0 through 3.  If you inspect the log file, you should see scrolling messages like:
+If all went well, in your `output` directory, you should now have four `*.log` files, numbered 0 through 3, as well as four corresponding `*.eventlog` files.  If you inspect the `*.log` file, you should see scrolling messages like:
 
 ```
 Applying reqNo=5 with data data-5 to log
@@ -44,4 +44,6 @@ Applying reqNo=13 with data data-13 to log
 Applying reqNo=14 with data data-14 to log
 ```
 
-Note.  As warned, there are currently unsquashed bugs, and unimplemented features, and it's been observed that this network will break and stop working after some period of time.  That's expected, please don't report it as a bug.  Feel free to submit PRs for documentation improvements, usability improvements, etc. but work to find and address these bugs is underway in the main repository with automated testing frameworks.
+The `*.eventlog` files can be viewed using either the `mircat` or the `mirbft-visualizer` tools.
+
+Note.  As warned, there are currently unsquashed bugs, and unimplemented features, and it's been observed that this network will often break and stop working after some period of time.  That's expected, please don't report it as a bug.  Feel free to submit PRs for documentation improvements, usability improvements, etc. but work to find and address these bugs is underway in the main repository with automated testing frameworks.

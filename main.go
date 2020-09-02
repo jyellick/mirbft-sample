@@ -11,6 +11,7 @@ import (
 	"github.com/IBM/mirbft"
 	pb "github.com/IBM/mirbft/mirbftpb"
 	"github.com/IBM/mirbft/mock"
+	"github.com/IBM/mirbft/recorder"
 	"github.com/IBM/mirbft/sample"
 	"github.com/golang/protobuf/proto"
 	"github.com/guoger/mir-sample/network"
@@ -38,32 +39,29 @@ func check(err error) {
 	}
 }
 
-func main() {
-	logger, err := zap.NewProduction()
+func startRecording(id uint64, doneC <-chan struct{}) *recorder.Interceptor {
+	file, err := os.Create(fmt.Sprintf("output/%d.eventlog", id))
 	check(err)
 
-	f := os.Args[1]
-	config, err := network.LoadConfig(f)
-	check(err)
+	startTime := time.Now()
+	interceptor := recorder.NewInterceptor(
+		id,
+		func() int64 {
+			return time.Since(startTime).Milliseconds()
+		},
+		10000,
+		doneC,
+	)
 
-	// bootstrap network
-	networkState := mirbft.StandardInitialNetworkState(len(config.Peers), 0)
-	networkState.Config.NumberOfBuckets = 1
-	networkState.Config.CheckpointInterval = 40
+	go func() {
+		interceptor.Drain(file)
+		defer file.Close()
+	}()
 
-	mirConfig := &mirbft.Config{
-		ID:                   config.ID,
-		Logger:               logger,
-		BatchSize:            1,
-		HeartbeatTicks:       2,
-		SuspectTicks:         4,
-		NewEpochTimeoutTicks: 8,
-		BufferSize:           500,
-	}
+	return interceptor
+}
 
-	doneC := make(chan struct{})
-	defer close(doneC)
-
+func mockStorage(networkState *pb.NetworkState) mirbft.Storage {
 	storage := &mock.Storage{}
 	storage.LoadReturnsOnCall(0, &pb.Persistent{
 		Type: &pb.Persistent_CEntry{
@@ -94,7 +92,54 @@ func main() {
 	}, nil)
 	storage.LoadReturnsOnCall(2, nil, io.EOF)
 
-	node, err := mirbft.StartNode(mirConfig, doneC, storage)
+	return storage
+}
+
+func periodicallyPollStatus(node *mirbft.Node, frequency time.Duration, doneC <-chan struct{}) {
+	go func() {
+		for {
+			select {
+			case <-doneC:
+				return
+			case <-time.After(frequency):
+				status, _ := node.Status(context.Background())
+				fmt.Printf("Current status is:\n")
+				fmt.Println(status.Pretty())
+			}
+		}
+	}()
+}
+
+func main() {
+	logger, err := zap.NewProduction()
+	check(err)
+
+	f := os.Args[1]
+	config, err := network.LoadConfig(f)
+	if err != nil {
+		fmt.Printf("Could not load config at '%s': %s\n", os.Args[1], err)
+	}
+	check(err)
+
+	// bootstrap network
+	networkState := mirbft.StandardInitialNetworkState(len(config.Peers), 0)
+	networkState.Config.NumberOfBuckets = 1
+	networkState.Config.CheckpointInterval = 10
+
+	doneC := make(chan struct{})
+
+	mirConfig := &mirbft.Config{
+		ID:                   config.ID,
+		Logger:               logger,
+		EventInterceptor:     startRecording(config.ID, doneC),
+		BatchSize:            1,
+		HeartbeatTicks:       2,
+		SuspectTicks:         4,
+		NewEpochTimeoutTicks: 8,
+		BufferSize:           500,
+	}
+
+	node, err := mirbft.StartNode(mirConfig, doneC, mockStorage(networkState))
 	check(err)
 
 	// Create transport
@@ -128,10 +173,13 @@ func main() {
 		Node:   node,
 	}
 
-	msgCount := 10000
-	msgSeparation := 200 * time.Millisecond
+	msgCount := 1000
+	msgSeparation := 50 * time.Millisecond
 
 	go func() {
+		defer func() {
+			fmt.Printf("Proposer go routine exiting\n")
+		}()
 
 		for i := 0; i < msgCount; i++ {
 			// fmt.Printf("Proposing %d\n", i)
@@ -150,6 +198,8 @@ func main() {
 		}
 	}()
 
+	periodicallyPollStatus(node, 10*time.Second, doneC)
+
 	tickTime := 1000 * time.Millisecond
 	ticker := time.NewTicker(tickTime)
 
@@ -164,6 +214,17 @@ func main() {
 				fmt.Printf("\nDone committing %d requests\n", screenLog.count)
 				ticker.Stop()
 				close(doneC)
+				<-node.Err()
+				status, err := node.Status(context.Background())
+				if status != nil {
+					fmt.Println(status.Pretty())
+				}
+
+				if err == mirbft.ErrStopped {
+					fmt.Printf("\n\nStopped normally!\n")
+				} else {
+					fmt.Printf("\n\nStopped abnormally with error: %s", err)
+				}
 				return
 			}
 			err := node.AddResults(*results)
