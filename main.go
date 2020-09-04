@@ -2,63 +2,238 @@ package main
 
 import (
 	"context"
-	"crypto/md5"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/IBM/mirbft"
 	pb "github.com/IBM/mirbft/mirbftpb"
 	"github.com/IBM/mirbft/mock"
 	"github.com/IBM/mirbft/recorder"
-	"github.com/IBM/mirbft/sample"
-	"github.com/golang/protobuf/proto"
 	"github.com/guoger/mir-sample/network"
-	"go.uber.org/zap"
+	"github.com/pkg/errors"
+	"gopkg.in/alecthomas/kingpin.v2"
 )
 
-type ScreenLog struct {
-	count int
+type arguments struct {
+	cryptoConfig       *os.File
+	eventLog           string
+	bucketCount        uint
+	batchSize          uint
+	checkpointInterval uint
+	clientCount        uint
+	msgsPerClient      uint
 }
 
-func (sl *ScreenLog) Apply(entry *pb.QEntry) {
-	for _, request := range entry.Requests {
-		fmt.Printf("Applying reqNo=%d with data %s to log\n", request.Request.ReqNo, request.Request.Data)
-		sl.count++
-	}
-}
+func parseArgs(argsString []string) (*arguments, error) {
+	app := kingpin.New("mirbft-sample", "A small sample application implemented using the mirbft library.")
+	cryptoConfigFile := app.Flag("cryptoConfig", "The YAML file containing this node's crypto config (as generated via cryptogen).").Required().File()
+	eventLogFile := app.Flag("eventLog", "A path to a location to write the state event log for this invocation.").String()
+	bucketCount := app.Flag("bucketCount", "The number of buckets for the network configuration (max possible parallel leaders).").Default("1").Uint()
+	batchSize := app.Flag("batchSize ", "The number of requests to batch per sequence number.").Default("20").Uint()
+	checkpointInterval := app.Flag("checkpointInterval", "The checkpoint interval for network configuration (how often the application is asked to snapshot).").Default("20").Uint()
+	clientCount := app.Flag("clientCount", "The number of clients initially configured.").Default("1").Uint()
+	msgsPerClient := app.Flag("msgsPerClient", "The number of messages each client should send.").Default("1000").Uint()
 
-func (sl *ScreenLog) Snap() []byte {
-	return []byte("unimplemented")
-}
-
-func check(err error) {
+	_, err := app.Parse(argsString)
 	if err != nil {
-		panic(err)
+		return nil, err
+	}
+
+	return &arguments{
+		cryptoConfig:       *cryptoConfigFile,
+		eventLog:           *eventLogFile,
+		batchSize:          *batchSize,
+		bucketCount:        *bucketCount,
+		checkpointInterval: *checkpointInterval,
+		clientCount:        *clientCount,
+		msgsPerClient:      *msgsPerClient,
+	}, nil
+
+}
+
+type application struct {
+	mutex   sync.Mutex
+	wg      sync.WaitGroup
+	doneC   chan struct{}
+	args    *arguments
+	server  *server
+	clients []*client
+}
+
+type client struct {
+	id       uint64
+	msgCount uint
+}
+
+func (a *arguments) initializeApp() (*application, error) {
+	config, err := network.LoadConfig(a.cryptoConfig)
+	if err != nil {
+		return nil, errors.WithMessage(err, "failed loading crypto config")
+	}
+
+	clientIDs := make([]uint64, int(a.clientCount))
+	for i := range clientIDs {
+		clientIDs[i] = uint64(i)
+	}
+
+	// bootstrap network state
+	networkState := mirbft.StandardInitialNetworkState(len(config.Peers), clientIDs...)
+	networkState.Config.NumberOfBuckets = int32(a.bucketCount)
+	networkState.Config.CheckpointInterval = int32(a.checkpointInterval)
+	for _, client := range networkState.Clients {
+		client.Width = 5000
+	}
+
+	doneC := make(chan struct{})
+
+	// If an eventLog is configured, configure a recording interceptor for the server
+	// to log the state machine events to this log file, note, this is generally
+	// not required or desirable for production apps, but, is nice for debugging
+	// and visualization.
+	var recording *recorder.Interceptor
+	if a.eventLog != "" {
+		startTime := time.Now()
+		recording = recorder.NewInterceptor(
+			config.ID,
+			func() int64 {
+				return time.Since(startTime).Milliseconds()
+			},
+			10000,
+			doneC,
+		)
+	}
+
+	serverConfig := &serverConfig{
+		batchSize: uint32(a.batchSize),
+		storage:   mockStorage(networkState),
+		recording: recording,
+		log: &applicationLog{
+			targetCount:     a.clientCount * a.msgsPerClient,
+			applicationDone: make(chan struct{}),
+		},
+		transportConfig: config,
+		doneC:           doneC,
+	}
+
+	fmt.Printf("Setting target count to: %d\n", serverConfig.log.targetCount)
+
+	server, err := serverConfig.initialize()
+	if err != nil {
+		return nil, errors.WithMessage(err, "could not initialize server")
+	}
+
+	clients := make([]*client, len(networkState.Clients))
+	for i, c := range networkState.Clients {
+		clients[i] = &client{
+			id:       c.Id,
+			msgCount: a.msgsPerClient,
+		}
+	}
+
+	return &application{
+		args:    a,
+		server:  server,
+		clients: clients,
+		doneC:   doneC,
+	}, nil
+}
+
+func (a *application) runClients(node *mirbft.Node) {
+	a.wg.Add(len(a.clients))
+	for _, c := range a.clients {
+		go func(client *client) {
+			// Note, the blocking calls into node.ClientProposer and
+			// into proposer.Propose will unblock when doneC closes,
+			// as the server will exit and cause these to return.
+			defer func() {
+				fmt.Printf("Client %d go routine exiting\n", client.id)
+				a.wg.Done()
+			}()
+			proposer, err := node.ClientProposer(context.Background(), 0)
+			if err != nil {
+				fmt.Printf("ERROR: Client %d failed to get proposer: %s\n", client.id, err)
+				return
+			}
+
+			for i := uint(0); i < client.msgCount; i++ {
+				// fmt.Printf("Proposing %d\n", i)
+				req := &pb.Request{
+					ClientId: client.id,
+					ReqNo:    uint64(i),
+					Data:     []byte(fmt.Sprintf("application-data-%d-%d", client.id, i)),
+				}
+
+				err = proposer.Propose(context.Background(), req)
+				if err != nil {
+					fmt.Printf("ERROR: Client %d failed to propose request %d: %s\n", client.id, i, err)
+					return
+				}
+			}
+		}(c)
 	}
 }
 
-func startRecording(id uint64, doneC <-chan struct{}) *recorder.Interceptor {
-	file, err := os.Create(fmt.Sprintf("output/%d.eventlog", id))
-	check(err)
+func (a *application) drainRecorder() error {
+	if a.server.config.recording == nil {
+		return nil
+	}
 
-	startTime := time.Now()
-	interceptor := recorder.NewInterceptor(
-		id,
-		func() int64 {
-			return time.Since(startTime).Milliseconds()
-		},
-		10000,
-		doneC,
-	)
+	file, err := os.Create(a.args.eventLog)
+	if err != nil {
+		return err
+	}
+	a.wg.Add(1)
 
 	go func() {
-		interceptor.Drain(file)
+		// Note, the recording took a.doneC as
+		// a parameter at creation time and will
+		// exit when it closes.
+
 		defer file.Close()
+		defer a.wg.Done()
+		a.server.config.recording.Drain(file)
+		fmt.Printf("Recorder go routine exiting\n")
 	}()
 
-	return interceptor
+	return nil
+}
+
+func (a *application) run() error {
+	// Each of these calls spawns zero or more go routines
+	// and adds them to the wait group a.wg.  Each of these
+	// go routines will eventually exit once a.doneC closes.
+	a.runClients(a.server.node)
+	err := a.drainRecorder()
+	if err != nil {
+		return errors.WithMessage(err, "could not begin draining the recorder")
+	}
+
+	// This call triggers the main server loop which will execute
+	// until the application log finishes, or an error occurs
+	err = a.server.run()
+	if err != nil {
+		return errors.WithMessage(err, "server exited abnormally")
+	}
+
+	return nil
+}
+
+// stop may be called by the main thread, or by the signal handler
+// so we ues a mutex to prevent double closure of the doneC
+func (a *application) stop() {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+
+	select {
+	case <-a.doneC:
+	default:
+		close(a.doneC)
+	}
 }
 
 func mockStorage(networkState *pb.NetworkState) mirbft.Storage {
@@ -95,146 +270,42 @@ func mockStorage(networkState *pb.NetworkState) mirbft.Storage {
 	return storage
 }
 
-func periodicallyPollStatus(node *mirbft.Node, frequency time.Duration, doneC <-chan struct{}) {
+func handleSignals(doneC <-chan struct{}, stop func()) {
+	sigC := make(chan os.Signal, 1)
+
+	signal.Notify(sigC, syscall.SIGINT, syscall.SIGTERM)
+
 	go func() {
-		for {
-			select {
-			case <-doneC:
-				return
-			case <-time.After(frequency):
-				status, _ := node.Status(context.Background())
-				fmt.Printf("Current status is:\n")
-				fmt.Println(status.Pretty())
-			}
+		select {
+		case sig := <-sigC:
+			fmt.Printf("Caught signal, exiting: %v\n", sig)
+			stop()
+		case <-doneC:
 		}
 	}()
 }
 
 func main() {
-	logger, err := zap.NewProduction()
-	check(err)
-
-	f := os.Args[1]
-	config, err := network.LoadConfig(f)
+	kingpin.Version("0.0.1")
+	args, err := parseArgs(os.Args[1:])
 	if err != nil {
-		fmt.Printf("Could not load config at '%s': %s\n", os.Args[1], err)
-	}
-	check(err)
-
-	// bootstrap network
-	networkState := mirbft.StandardInitialNetworkState(len(config.Peers), 0)
-	networkState.Config.NumberOfBuckets = 1
-	networkState.Config.CheckpointInterval = 10
-
-	doneC := make(chan struct{})
-
-	mirConfig := &mirbft.Config{
-		ID:                   config.ID,
-		Logger:               logger,
-		EventInterceptor:     startRecording(config.ID, doneC),
-		BatchSize:            1,
-		HeartbeatTicks:       2,
-		SuspectTicks:         4,
-		NewEpochTimeoutTicks: 8,
-		BufferSize:           500,
+		kingpin.Fatalf("Error parsing arguments, %s, try --help", err)
 	}
 
-	node, err := mirbft.StartNode(mirConfig, doneC, mockStorage(networkState))
-	check(err)
-
-	// Create transport
-	t, err := network.NewTransport(logger, config)
-	check(err)
-
-	t.Handle(func(id uint64, data []byte) {
-		msg := &pb.Msg{}
-		err := proto.Unmarshal(data, msg)
-		check(err)
-
-		err = node.Step(context.Background(), id, msg)
-		if err != nil {
-			logger.Warn(fmt.Sprintf("Failed to step message to mir node: %s", err))
-		}
-	})
-
-	err = t.Start()
-	check(err)
-	defer t.Close()
-
-	// let the links establish first...
-	time.Sleep(2 * time.Second)
-
-	screenLog := &ScreenLog{}
-
-	processor := &sample.SerialProcessor{
-		Link:   t,
-		Hasher: md5.New,
-		Log:    screenLog,
-		Node:   node,
+	application, err := args.initializeApp()
+	if err != nil {
+		kingpin.Fatalf("Error initializing app, %s", err)
 	}
 
-	msgCount := 1000
-	msgSeparation := 50 * time.Millisecond
+	handleSignals(application.doneC, application.stop)
 
-	go func() {
-		defer func() {
-			fmt.Printf("Proposer go routine exiting\n")
-		}()
-
-		for i := 0; i < msgCount; i++ {
-			// fmt.Printf("Proposing %d\n", i)
-			req := &pb.Request{
-				ClientId: 0,
-				ReqNo:    uint64(i),
-				Data:     []byte(fmt.Sprintf("data-%d", i)),
-			}
-			proposer, err := node.ClientProposer(context.Background(), 0)
-			check(err)
-
-			err = proposer.Propose(context.Background(), req)
-			check(err)
-			// fmt.Printf("Proposed %d\n", i)
-			time.Sleep(msgSeparation)
-		}
-	}()
-
-	periodicallyPollStatus(node, 10*time.Second, doneC)
-
-	tickTime := 1000 * time.Millisecond
-	ticker := time.NewTicker(tickTime)
-
-	for {
-		select {
-		case <-ticker.C:
-			err := node.Tick()
-			check(err)
-		case actions := <-node.Ready():
-			results := processor.Process(&actions)
-			if screenLog.count >= msgCount {
-				fmt.Printf("\nDone committing %d requests\n", screenLog.count)
-				ticker.Stop()
-				close(doneC)
-				<-node.Err()
-				status, err := node.Status(context.Background())
-				if status != nil {
-					fmt.Println(status.Pretty())
-				}
-
-				if err == mirbft.ErrStopped {
-					fmt.Printf("\n\nStopped normally!\n")
-				} else {
-					fmt.Printf("\n\nStopped abnormally with error: %s", err)
-				}
-				return
-			}
-			err := node.AddResults(*results)
-			check(err)
-		case <-node.Err():
-			status, err := node.Status(context.Background())
-			fmt.Printf("exited with error: %+v\n", err)
-			fmt.Println(status.Pretty())
-			return
-		}
+	err = application.run()
+	if err != nil {
+		kingpin.Fatalf("Application exited abnormally, %s", err)
 	}
 
+	application.stop()
+	application.wg.Wait()
+
+	fmt.Printf("Success! All worker go routines exited, terminating!\n")
 }

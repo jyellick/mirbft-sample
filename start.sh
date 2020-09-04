@@ -3,5 +3,5 @@
 mkdir -p output
 
 for ii in $(seq 0 3) ; do
-	./mir-sample cryptogen/config${ii}.yaml &> output/${ii}.log &
+	./mir-sample --cryptoConfig cryptogen/config${ii}.yaml --eventLog output/${ii}.eventlog &> output/${ii}.log &
 done

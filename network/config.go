@@ -2,6 +2,7 @@ package network
 
 import (
 	"encoding/hex"
+	"io"
 	"io/ioutil"
 	"net"
 	"strconv"
@@ -24,8 +25,8 @@ type Peer struct {
 	PublicKey string `yaml:"public_key"`
 }
 
-func LoadConfig(f string) (*Config, error) {
-	data, err := ioutil.ReadFile(f)
+func LoadConfig(f io.Reader) (*Config, error) {
+	data, err := ioutil.ReadAll(f)
 	if err != nil {
 		return nil, errors.Errorf("fail to read config file: %s", err)
 	}
