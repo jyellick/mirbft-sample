@@ -35,12 +35,16 @@ func (s *server) run() error {
 	time.Sleep(2 * time.Second)
 
 	// a simple non-optimized processor
-	processor := &sample.SerialProcessor{
-		Link:   s.transport,
-		Hasher: md5.New,
-		Log:    s.config.log,
-		Node:   s.node,
+	processor := &sample.ParallelProcessor{
+		Link:         s.transport,
+		Hasher:       md5.New,
+		Log:          s.config.log,
+		Node:         s.node,
+		ActionsC:     make(chan *mirbft.Actions),
+		ActionsDoneC: make(chan *mirbft.ActionResults),
 	}
+
+	go processor.Start(s.config.doneC)
 
 	tickTime := 1000 * time.Millisecond
 	ticker := time.NewTicker(tickTime)
@@ -59,7 +63,7 @@ func (s *server) run() error {
 				return err
 			}
 		case actions := <-node.Ready():
-			results := processor.Process(&actions)
+			results := processor.Process(&actions, s.config.doneC)
 			err := node.AddResults(*results)
 			if err != nil {
 				return err
@@ -139,6 +143,7 @@ type applicationLog struct {
 
 func (al *applicationLog) Apply(entry *pb.QEntry) {
 	for _, request := range entry.Requests {
+		_ = request
 		fmt.Printf("Applying clientID=%d reqNo=%d with data %s to log\n", request.Request.ClientId, request.Request.ReqNo, request.Request.Data)
 		if al.count == 0 {
 			al.timeAtFirstCommit = time.Now()
@@ -147,6 +152,8 @@ func (al *applicationLog) Apply(entry *pb.QEntry) {
 
 		if al.count == al.targetCount {
 			fmt.Printf("Successfully applied all expected requests in %v!", time.Since(al.timeAtFirstCommit))
+			// Give the other nodes a chance to finish committing before shutdown
+			time.Sleep(2 * time.Second)
 			close(al.applicationDone)
 		}
 	}

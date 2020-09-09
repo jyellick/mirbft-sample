@@ -66,6 +66,8 @@ github.com/jyellick/mirbft v0.0.0-20200903051412-8c1be49c4f8c h1:wEGaLg2dySqnk6h
 github.com/jyellick/mirbft v0.0.0-20200903051412-8c1be49c4f8c/go.mod h1:m7CafoTeA5m/sClXvgV0cLceSbydjAafxKIaWlkT7Kk=
 github.com/jyellick/mirbft v0.0.0-20200903174654-6cfc01e98620 h1:ZO9xFdEqEOFnty4KgsZlY4XN4CrQkGWGIKhWn9aHVAM=
 github.com/jyellick/mirbft v0.0.0-20200903174654-6cfc01e98620/go.mod h1:m7CafoTeA5m/sClXvgV0cLceSbydjAafxKIaWlkT7Kk=
+github.com/jyellick/mirbft v0.0.0-20200909045218-ddbbff6cde3f h1:B9WfeifTwKxbBK60k4cUpUm/BdJ+nz/N4/YtDQ+hXfw=
+github.com/jyellick/mirbft v0.0.0-20200909045218-ddbbff6cde3f/go.mod h1:m7CafoTeA5m/sClXvgV0cLceSbydjAafxKIaWlkT7Kk=
 github.com/kisielk/gotool v1.0.0/go.mod h1:XhKaO+MFFWcvkIS/tQcRk01m1F5IRFswLeQ+oQHNcck=
 github.com/kr/pretty v0.1.0 h1:L/CwN0zerZDmRFUapSPitk6f+Q3+0za1rQkzVuMiMFI=
 github.com/kr/pretty v0.1.0/go.mod h1:dAy3ld7l9f0ibDNOQOHHMYYIIbhfbHSm3C4ZsoJORNo=
