@@ -69,6 +69,7 @@ func NewTransport(logger *zap.Logger, config *Config) (*Transport, error) {
 	node, err := noise.NewNode(
 		noise.WithNodePrivateKey(privkey),
 		noise.WithNodeID(id),
+		noise.WithNodeLogger(logger.Named("noise")),
 		noise.WithNodeBindPort(uint16(p)),
 	)
 	if err != nil {
@@ -126,6 +127,6 @@ func (t *Transport) Send(dest uint64, msg *pb.Msg) {
 
 	err = t.node.Send(context.TODO(), addr, data)
 	if err != nil {
-		t.logger.Debugf("Failed to send to %s: %s", addr, err)
+		t.logger.Warnf("Failed to send to %s: %s", addr, err)
 	}
 }

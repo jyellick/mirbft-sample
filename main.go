@@ -300,12 +300,11 @@ func main() {
 	handleSignals(application.doneC, application.stop)
 
 	err = application.run()
+	application.stop()
+	application.wg.Wait()
 	if err != nil {
 		kingpin.Fatalf("Application exited abnormally, %s", err)
 	}
-
-	application.stop()
-	application.wg.Wait()
 
 	fmt.Printf("Success! All worker go routines exited, terminating!\n")
 }
