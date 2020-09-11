@@ -12,8 +12,9 @@ import (
 
 	"github.com/IBM/mirbft"
 	pb "github.com/IBM/mirbft/mirbftpb"
-	"github.com/IBM/mirbft/mock"
 	"github.com/IBM/mirbft/recorder"
+	"github.com/IBM/mirbft/reqstore"
+	"github.com/IBM/mirbft/simplewal"
 	"github.com/guoger/mir-sample/network"
 	"github.com/pkg/errors"
 	"gopkg.in/alecthomas/kingpin.v2"
@@ -21,6 +22,7 @@ import (
 
 type arguments struct {
 	cryptoConfig       *os.File
+	runDir             string
 	eventLog           string
 	bucketCount        uint
 	batchSize          uint

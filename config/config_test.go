@@ -1,4 +1,10 @@
-package network
+/*
+Copyright IBM Corp. All Rights Reserved.
+
+SPDX-License-Identifier: Apache-2.0
+*/
+
+package config
 
 import (
 	"testing"
@@ -8,7 +14,5 @@ import (
 
 func TestLoadConfig(t *testing.T) {
 	config, err := LoadConfig("config.yaml")
-	assert.NoError(t, err)
-	_, err = NewID(config)
 	assert.NoError(t, err)
 }
