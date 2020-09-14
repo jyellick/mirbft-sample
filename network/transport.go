@@ -9,7 +9,7 @@ import (
 
 	pb "github.com/IBM/mirbft/mirbftpb"
 	"github.com/golang/protobuf/proto"
-	"github.com/guoger/mir-sample/config"
+	"github.com/jyellick/mirbft-sample/config"
 	"github.com/perlin-network/noise"
 	"go.uber.org/zap"
 )

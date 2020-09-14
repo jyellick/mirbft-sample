@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"syscall"
 
-	sample "github.com/guoger/mir-sample"
-	"github.com/guoger/mir-sample/config"
+	sample "github.com/jyellick/mirbft-sample"
+	"github.com/jyellick/mirbft-sample/config"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"gopkg.in/alecthomas/kingpin.v2"

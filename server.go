@@ -13,8 +13,8 @@ import (
 	"github.com/IBM/mirbft/reqstore"
 	"github.com/IBM/mirbft/simplewal"
 	"github.com/golang/protobuf/proto"
-	"github.com/guoger/mir-sample/config"
-	"github.com/guoger/mir-sample/network"
+	"github.com/jyellick/mirbft-sample/config"
+	"github.com/jyellick/mirbft-sample/network"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
