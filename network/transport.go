@@ -3,11 +3,13 @@ package network
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"net"
 	"strconv"
 
 	pb "github.com/IBM/mirbft/mirbftpb"
 	"github.com/golang/protobuf/proto"
+	"github.com/guoger/mir-sample/config"
 	"github.com/perlin-network/noise"
 	"go.uber.org/zap"
 )
@@ -25,10 +27,10 @@ type Transport struct {
 
 type Handler func(id uint64, data []byte)
 
-func NewTransport(logger *zap.Logger, config *Config) (*Transport, error) {
+func NewTransport(logger *zap.Logger, config *config.NodeConfig) (*Transport, error) {
 	id2addr := make(map[uint64]string)
 	pubkey2id := make(map[noise.PublicKey]uint64)
-	for _, p := range config.Peers {
+	for _, p := range config.Nodes {
 		pubkeyBytes, err := hex.DecodeString(p.PublicKey)
 		if err != nil {
 			return nil, err
@@ -39,6 +41,7 @@ func NewTransport(logger *zap.Logger, config *Config) (*Transport, error) {
 
 		id2addr[p.ID] = p.Address
 		pubkey2id[pubkey] = p.ID
+		fmt.Printf("Adding mapping from %x to %s\n", pubkeyBytes, p.ID)
 	}
 
 	key, err := hex.DecodeString(config.PrivateKey)
@@ -53,7 +56,10 @@ func NewTransport(logger *zap.Logger, config *Config) (*Transport, error) {
 		return nil, err
 	}
 
+	fmt.Printf("Found addr=%s port=%s\n", addr, port)
+
 	ip := net.ParseIP(addr)
+	fmt.Printf("Found addr=%v\n", ip)
 
 	p, err := strconv.ParseInt(port, 0, 16)
 	if err != nil {
@@ -64,7 +70,6 @@ func NewTransport(logger *zap.Logger, config *Config) (*Transport, error) {
 		ID:   privkey.Public(),
 		Host: ip,
 		Port: uint16(p),
-		//Address: config.ListenAddress,
 	}
 	node, err := noise.NewNode(
 		noise.WithNodePrivateKey(privkey),
@@ -89,7 +94,7 @@ func (t *Transport) Handle(h Handler) {
 	t.node.Handle(func(ctx noise.HandlerContext) error {
 		id, ok := t.pubkey2id[ctx.ID().ID]
 		if !ok {
-			t.logger.Fatal("Unknown remote: %s", ctx.ID().Address)
+			t.logger.Fatalf("Unknown remote: %+v", ctx.ID())
 		}
 
 		h(id, ctx.Data())

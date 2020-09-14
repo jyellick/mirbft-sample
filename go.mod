@@ -2,7 +2,7 @@ module github.com/guoger/mir-sample
 
 go 1.13
 
-replace github.com/IBM/mirbft => github.com/jyellick/mirbft v0.0.0-20200911020316-3cc0de9351ab
+replace github.com/IBM/mirbft => github.com/jyellick/mirbft v0.0.0-20200914171122-176117de1ea2
 
 require (
 	github.com/IBM/mirbft v0.0.0-20200820193629-05a8c61dd0f9

@@ -16,12 +16,13 @@ import (
 )
 
 type NodeConfig struct {
-	ID            uint64   `yaml:"id"`
-	ListenAddress string   `yaml:"listen_address"`
-	PrivateKey    string   `yaml:"private_key"`
-	Mir           Mir      `yaml:"mir"`
-	Nodes         []Node   `yaml:"nodes"`
-	Clients       []Client `yaml:"clients"`
+	ID            uint64       `yaml:"id"`
+	ListenAddress string       `yaml:"listen_address"`
+	PrivateKey    string       `yaml:"private_key"`
+	MirRuntime    MirRuntime   `yaml:"mir_runtime"`
+	MirBootstrap  MirBootstrap `yaml:"mir_bootstrap"`
+	Nodes         []Node       `yaml:"nodes"`
+	Clients       []Client     `yaml:"clients"`
 }
 
 type ClientConfig struct {
@@ -44,11 +45,12 @@ type Client struct {
 // MirRuntime contains per Node instance fields which should be consistent
 // across honest nodes, but which may be tweaked after bootstrap.
 type MirRuntime struct {
-	TickInterval            time.Duration `yaml:"tick_interval"`
-	HeartbeatTicks          uint32        `yaml:"heartbeat_ticks"`
-	SuspectTicks            uint32        `yaml:"suspect_ticks"`
-	EpochChangeTimeoutTicks uint32        `yaml:"epoch_change_timeout_ticks"`
-	BatchSize               uint32        `yaml:"batch_size"`
+	TickInterval         time.Duration `yaml:"tick_interval"`
+	HeartbeatTicks       uint32        `yaml:"heartbeat_ticks"`
+	SuspectTicks         uint32        `yaml:"suspect_ticks"`
+	NewEpochTimeoutTicks uint32        `yaml:"epoch_change_timeout_ticks"`
+	BatchSize            uint32        `yaml:"batch_size"`
+	BufferSize           uint32        `yaml:"buffer_size"`
 }
 
 // MirBootstrap contains network-wide initialization parameters which cannot

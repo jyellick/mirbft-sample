@@ -1,8 +1,6 @@
 # ignore config
-cryptogen/*.yaml
+bootstrap.d/*
 
-# ignore binary
-mir-sample
-
-# ignore output dir
-output/
+# ignore binaries
+bootstrap
+node

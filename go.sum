@@ -92,6 +92,16 @@ github.com/jyellick/mirbft v0.0.0-20200909045218-ddbbff6cde3f h1:B9WfeifTwKxbBK6
 github.com/jyellick/mirbft v0.0.0-20200909045218-ddbbff6cde3f/go.mod h1:m7CafoTeA5m/sClXvgV0cLceSbydjAafxKIaWlkT7Kk=
 github.com/jyellick/mirbft v0.0.0-20200911020316-3cc0de9351ab h1:gDfozEfpBO84/Te082trbEUErLHvJz1Oll2tVsXNUhc=
 github.com/jyellick/mirbft v0.0.0-20200911020316-3cc0de9351ab/go.mod h1:XUnpTCYfNA0FSnaSkJTaUkmilZog5HhbZIwd8oY+WyQ=
+github.com/jyellick/mirbft v0.0.0-20200914154024-6fa9a0d2b63b h1:KJWNSEcgmod6VGGRMWomdEBDKWZvLC0qWfK9gTTOoBs=
+github.com/jyellick/mirbft v0.0.0-20200914154024-6fa9a0d2b63b/go.mod h1:XUnpTCYfNA0FSnaSkJTaUkmilZog5HhbZIwd8oY+WyQ=
+github.com/jyellick/mirbft v0.0.0-20200914164833-64acb31e8f55 h1:odzFZKldm7BsgoHSjKb7CldCtNoAF6BL/AgAglrcgzg=
+github.com/jyellick/mirbft v0.0.0-20200914164833-64acb31e8f55/go.mod h1:XUnpTCYfNA0FSnaSkJTaUkmilZog5HhbZIwd8oY+WyQ=
+github.com/jyellick/mirbft v0.0.0-20200914165703-b8c0618f0515 h1:FSLj6XkUWKVRbUAWvfuim3TKXpCeLXsZzlDXVM5yhCY=
+github.com/jyellick/mirbft v0.0.0-20200914165703-b8c0618f0515/go.mod h1:XUnpTCYfNA0FSnaSkJTaUkmilZog5HhbZIwd8oY+WyQ=
+github.com/jyellick/mirbft v0.0.0-20200914170757-650454fa9d8f h1:h2MQLw0KAqUEs4sc5yvm/JwoCRTHQr+vXqa/Wx3B9Vw=
+github.com/jyellick/mirbft v0.0.0-20200914170757-650454fa9d8f/go.mod h1:XUnpTCYfNA0FSnaSkJTaUkmilZog5HhbZIwd8oY+WyQ=
+github.com/jyellick/mirbft v0.0.0-20200914171122-176117de1ea2 h1:zP5g9amPirA+w1Qyq2MPHd397IgnfjWWyweEXA2yg78=
+github.com/jyellick/mirbft v0.0.0-20200914171122-176117de1ea2/go.mod h1:XUnpTCYfNA0FSnaSkJTaUkmilZog5HhbZIwd8oY+WyQ=
 github.com/kisielk/gotool v1.0.0/go.mod h1:XhKaO+MFFWcvkIS/tQcRk01m1F5IRFswLeQ+oQHNcck=
 github.com/kr/pretty v0.1.0 h1:L/CwN0zerZDmRFUapSPitk6f+Q3+0za1rQkzVuMiMFI=
 github.com/kr/pretty v0.1.0/go.mod h1:dAy3ld7l9f0ibDNOQOHHMYYIIbhfbHSm3C4ZsoJORNo=

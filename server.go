@@ -1,117 +1,98 @@
-package main
+package sample
 
 import (
 	"context"
 	"crypto/md5"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/IBM/mirbft"
 	pb "github.com/IBM/mirbft/mirbftpb"
 	"github.com/IBM/mirbft/recorder"
-	"github.com/IBM/mirbft/sample"
+	"github.com/IBM/mirbft/reqstore"
+	"github.com/IBM/mirbft/simplewal"
 	"github.com/golang/protobuf/proto"
+	"github.com/guoger/mir-sample/config"
 	"github.com/guoger/mir-sample/network"
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
 
-type server struct {
-	node      *mirbft.Node
-	transport *network.Transport
-	config    *serverConfig
+type Server struct {
+	Logger           *zap.Logger
+	NodeConfig       *config.NodeConfig
+	WALPath          string
+	RequestStorePath string
+	EventLogPath     string
+	Parallel         bool
+
+	doneC chan struct{}
+	exitC chan struct{}
 }
 
-func (s *server) run() error {
-	err := s.transport.Start()
+func (s *Server) Run() error {
+	s.doneC = make(chan struct{})
+	s.exitC = make(chan struct{})
+	defer close(s.exitC)
+
+	mirConfig := mirConfig(s.NodeConfig)
+	mirConfig.Logger = s.Logger
+
+	if s.EventLogPath != "" {
+		file, err := os.Create(s.EventLogPath)
+		if err != nil {
+			return errors.WithMessage(err, "could not create event log file")
+		}
+		startTime := time.Now()
+		recorder := recorder.NewInterceptor(
+			s.NodeConfig.ID,
+			func() int64 {
+				return time.Since(startTime).Milliseconds()
+			},
+			5000,
+		)
+		go recorder.Drain(file)
+		defer recorder.Stop()
+
+		mirConfig.EventInterceptor = recorder
+	}
+
+	wal, err := simplewal.Open(s.WALPath)
 	if err != nil {
-		return err
+		return errors.WithMessage(err, "could not open WAL")
 	}
-	defer s.transport.Close()
+	defer wal.Close()
 
-	// TODO, maybe detect if this is first start and actually
-	// detect other node liveness via the transport?
-
-	// let the links establish first to reduce logspam...
-	time.Sleep(2 * time.Second)
-
-	// a simple non-optimized processor
-	processor := &sample.ParallelProcessor{
-		Link:         s.transport,
-		Hasher:       md5.New,
-		Log:          s.config.log,
-		Node:         s.node,
-		ActionsC:     make(chan *mirbft.Actions),
-		ActionsDoneC: make(chan *mirbft.ActionResults),
+	firstStart, err := wal.IsEmpty()
+	if err != nil {
+		return errors.WithMessage(err, "could not query WAL")
 	}
 
-	go processor.Start(s.config.doneC)
+	reqStore, err := reqstore.Open(s.RequestStorePath)
+	if err != nil {
+		return errors.WithMessage(err, "could not open request store")
+	}
+	defer reqStore.Close()
 
-	tickTime := 1000 * time.Millisecond
-	ticker := time.NewTicker(tickTime)
-	defer ticker.Stop()
-
-	node := s.node
-
-	// Main control loop
-	for {
-		select {
-		case <-s.config.log.applicationDone:
-			return nil
-		case <-ticker.C:
-			err := node.Tick()
-			if err != nil {
-				return err
-			}
-		case actions := <-node.Ready():
-			results := processor.Process(&actions, s.config.doneC)
-			err := node.AddResults(*results)
-			if err != nil {
-				return err
-			}
-		case <-node.Err():
-			_, err := node.Status(context.Background())
-			return err
+	var node *mirbft.Node
+	if firstStart {
+		node, err = mirbft.StartNewNode(mirConfig, initialNetworkState(s.NodeConfig), []byte("initial-checkpoint-value"))
+		if err != nil {
+			return errors.WithMessage(err, "could not bootstrap node")
+		}
+	} else {
+		node, err = mirbft.RestartNode(mirConfig, wal, reqStore)
+		if err != nil {
+			return errors.WithMessage(err, "could not restart node")
 		}
 	}
-}
-
-type serverConfig struct {
-	batchSize       uint32
-	storage         mirbft.Storage
-	recording       *recorder.Interceptor
-	log             *applicationLog
-	transportConfig *network.Config
-	doneC           <-chan struct{}
-}
-
-func (sc *serverConfig) initialize() (*server, error) {
-	logger := zap.NewExample()
-
-	nodeConfig := &mirbft.Config{
-		ID:                   sc.transportConfig.ID,
-		Logger:               logger,
-		BatchSize:            sc.batchSize,
-		HeartbeatTicks:       2,
-		SuspectTicks:         4,
-		NewEpochTimeoutTicks: 8,
-		BufferSize:           500,
-	}
-
-	// Note, if the interface value is not actually nil
-	// we will end up with a nil dereference in the node
-	if sc.recording != nil {
-		nodeConfig.EventInterceptor = sc.recording
-	}
-
-	node, err := mirbft.StartNode(nodeConfig, sc.doneC, sc.storage)
-	if err != nil {
-		return nil, err
-	}
+	defer node.Stop()
 
 	// Create transport
-	t, err := network.NewTransport(logger, sc.transportConfig)
+	t, err := network.NewTransport(s.Logger, s.NodeConfig)
 	if err != nil {
-		return nil, err
+		return errors.WithMessage(err, "could not create networking")
 	}
 
 	t.Handle(func(id uint64, data []byte) {
@@ -123,42 +104,118 @@ func (sc *serverConfig) initialize() (*server, error) {
 
 		err = node.Step(context.Background(), id, msg)
 		if err != nil {
-			logger.Warn(fmt.Sprintf("Failed to step message to mir node: %s", err))
+			s.Logger.Warn(fmt.Sprintf("Failed to step message to mir node: %s", err))
 		}
 	})
 
-	return &server{
-		node:      node,
-		transport: t,
-		config:    sc,
-	}, nil
+	err = t.Start()
+	if err != nil {
+		return errors.WithMessage(err, "could not start networking")
+	}
+	defer t.Close()
+
+	// TODO, maybe detect if this is first start and actually
+	// detect other node liveness via the transport?
+
+	// let the links establish first to reduce logspam...
+	time.Sleep(2 * time.Second)
+
+	processor := &mirbft.Processor{
+		Link:   t,
+		Hasher: md5.New,
+		Log: &applicationLog{
+			reqStore: reqStore,
+		}, // TODO, make more useful fixme
+		Node:         node,
+		RequestStore: reqStore,
+		WAL:          wal,
+	}
+	var process func(*mirbft.Actions) *mirbft.ActionResults
+
+	if !s.Parallel {
+		process = processor.Process
+	} else {
+		parallelProcessor := mirbft.NewProcessorWorkPool(processor, mirbft.ProcessorWorkPoolOpts{})
+		defer parallelProcessor.Stop()
+		process = parallelProcessor.Process
+	}
+
+	ticker := time.NewTicker(s.NodeConfig.MirRuntime.TickInterval)
+	defer ticker.Stop()
+
+	// Main control loop
+	for {
+		select {
+		case <-ticker.C:
+			err := node.Tick()
+			if err != nil {
+				return err
+			}
+		case actions := <-node.Ready():
+			results := process(&actions)
+			err := node.AddResults(*results)
+			if err != nil {
+				return err
+			}
+		case <-node.Err():
+			_, err := node.Status(context.Background())
+			return err
+		case <-s.doneC:
+			return nil
+		}
+	}
+}
+
+func (s *Server) Stop() {
+	close(s.doneC)
+	<-s.exitC
 }
 
 type applicationLog struct {
-	count             uint
-	targetCount       uint
-	timeAtFirstCommit time.Time
-	applicationDone   chan struct{}
+	count    uint
+	reqStore *reqstore.Store
 }
 
 func (al *applicationLog) Apply(entry *pb.QEntry) {
+	fmt.Printf("Committing an entry for seq_no=%d\n", entry.SeqNo)
 	for _, request := range entry.Requests {
-		_ = request
-		fmt.Printf("Applying clientID=%d reqNo=%d with data %s to log\n", request.Request.ClientId, request.Request.ReqNo, request.Request.Data)
-		if al.count == 0 {
-			al.timeAtFirstCommit = time.Now()
+		reqData, err := al.reqStore.Get(request)
+		if err != nil {
+			panic(err)
 		}
+		fmt.Printf("Applying clientID=%d reqNo=%d with data %s to log\n", request.ClientId, request.ReqNo, reqData)
 		al.count++
-
-		if al.count == al.targetCount {
-			fmt.Printf("Successfully applied all expected requests in %v!", time.Since(al.timeAtFirstCommit))
-			// Give the other nodes a chance to finish committing before shutdown
-			time.Sleep(2 * time.Second)
-			close(al.applicationDone)
-		}
 	}
 }
 
 func (al *applicationLog) Snap() []byte {
 	return []byte("unimplemented")
+}
+
+func mirConfig(nodeConfig *config.NodeConfig) *mirbft.Config {
+	return &mirbft.Config{
+		ID:                   nodeConfig.ID,
+		BatchSize:            nodeConfig.MirRuntime.BatchSize,
+		HeartbeatTicks:       nodeConfig.MirRuntime.HeartbeatTicks,
+		SuspectTicks:         nodeConfig.MirRuntime.SuspectTicks,
+		NewEpochTimeoutTicks: nodeConfig.MirRuntime.NewEpochTimeoutTicks,
+		BufferSize:           nodeConfig.MirRuntime.BufferSize,
+	}
+
+}
+
+func initialNetworkState(nodeConfig *config.NodeConfig) *pb.NetworkState {
+	clientIDs := []uint64{}
+	for _, client := range nodeConfig.Clients {
+		clientIDs = append(clientIDs, client.ID)
+	}
+
+	networkState := mirbft.StandardInitialNetworkState(len(nodeConfig.Nodes), clientIDs...)
+	networkState.Config.NumberOfBuckets = int32(nodeConfig.MirBootstrap.NumberOfBuckets)
+	networkState.Config.CheckpointInterval = int32(nodeConfig.MirBootstrap.CheckpointInterval)
+	for _, client := range networkState.Clients {
+		client.Width = nodeConfig.MirBootstrap.ClientWindowSize
+	}
+
+	return networkState
 }
