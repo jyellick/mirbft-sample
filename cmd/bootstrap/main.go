@@ -14,7 +14,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/guoger/mir-sample/config"
+	"github.com/jyellick/mirbft-sample/config"
 	"github.com/perlin-network/noise"
 	"github.com/pkg/errors"
 	"gopkg.in/alecthomas/kingpin.v2"

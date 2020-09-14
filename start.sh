@@ -1,6 +1,11 @@
 #!/bin/bash
 
-killall node &> /dev/null
+set -ex
+
+go build ./cmd/bootstrap
+go build ./cmd/node
+
+killall node &> /dev/null || true
 rm -Rf bootstrap.d
 mkdir -p bootstrap.d
 
