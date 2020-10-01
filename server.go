@@ -31,7 +31,7 @@ type Server struct {
 	WALPath          string
 	RequestStorePath string
 	EventLogPath     string
-	Parallel         bool
+	Serial           bool
 
 	doneC chan struct{}
 	exitC chan struct{}
@@ -96,23 +96,62 @@ func (s *Server) Run() error {
 	defer node.Stop()
 
 	// Create transport
-	t, err := network.NewTransport(s.Logger, s.NodeConfig)
+	t, err := network.NewServerTransport(s.Logger, s.NodeConfig)
 	if err != nil {
 		return errors.WithMessage(err, "could not create networking")
 	}
 
-	t.Handle(func(id uint64, data []byte) {
-		msg := &pb.Msg{}
-		err := proto.Unmarshal(data, msg)
+	clientProposers := map[uint64]*mirbft.ClientProposer{}
+	for _, client := range s.NodeConfig.Clients {
+		clientProposer, err := node.ClientProposer(context.Background(), client.ID)
 		if err != nil {
-			panic(fmt.Sprintf("unexpected marshaling error: %s", err))
+			return errors.WithMessagef(err, "could not create proposer for client %d\n", client.ID)
 		}
+		clientProposers[client.ID] = clientProposer
+	}
 
-		err = node.Step(context.Background(), id, msg)
-		if err != nil {
-			s.Logger.Warn(fmt.Sprintf("Failed to step message to mir node: %s", err))
-		}
-	})
+	t.Handle(
+		func(nodeID uint64, data []byte) error {
+			msg := &pb.Msg{}
+			err := proto.Unmarshal(data, msg)
+			if err != nil {
+				return errors.WithMessage(err, "unexpected unmarshaling error")
+			}
+
+			err = node.Step(context.Background(), nodeID, msg)
+			if err != nil {
+				return errors.WithMessage(err, "failed to step message to mir node")
+			}
+
+			return nil
+		},
+		func(clientID uint64, data []byte) error {
+			msg := &pb.Request{}
+			err := proto.Unmarshal(data, msg)
+			if err != nil {
+				return errors.WithMessage(err, "unexpected unmarshaling error")
+			}
+
+			if msg.ClientId != clientID {
+				return errors.Errorf("client ID mismatch, claims to be %d but is %d\n", msg.ClientId, clientID)
+			}
+
+			proposer, ok := clientProposers[clientID]
+			if !ok {
+				return errors.Errorf("unknown client id\n", clientID)
+			}
+
+			fmt.Printf("About to propose %d.%d\n", msg.ClientId, msg.ReqNo)
+
+			err = proposer.Propose(context.Background(), msg)
+			if err != nil {
+				return errors.WithMessagef(err, "failed to propose message to client %d", clientID)
+			}
+
+			fmt.Printf(" ... done proposing %d.%d\n", msg.ClientId, msg.ReqNo)
+			return nil
+		},
+	)
 
 	err = t.Start()
 	if err != nil {
@@ -138,7 +177,7 @@ func (s *Server) Run() error {
 	}
 	var process func(*mirbft.Actions) *mirbft.ActionResults
 
-	if !s.Parallel {
+	if s.Serial {
 		process = processor.Process
 	} else {
 		parallelProcessor := mirbft.NewProcessorWorkPool(processor, mirbft.ProcessorWorkPoolOpts{})

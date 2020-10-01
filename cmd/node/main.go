@@ -24,7 +24,7 @@ type args struct {
 	nodeConfig *os.File
 	runDir     string
 	eventLog   bool
-	parallel   bool
+	serial     bool
 }
 
 func parseArgs(argsString []string) (*args, error) {
@@ -32,7 +32,7 @@ func parseArgs(argsString []string) (*args, error) {
 	nodeConfig := app.Flag("nodeConfig", "The YAML file containing this node's config (as generated via bootstrap).").Required().File()
 	runDir := app.Flag("runDir", "A path to a location to write the WAL, RequestStore, and EventLog.").ExistingDir()
 	eventLog := app.Flag("eventLog", "Whether the node should record a state machine event log").Default("false").Bool()
-	parallel := app.Flag("parallel ", "Whether the node should process actions in parallel or in series.").Default("true").Bool()
+	serial := app.Flag("serial", "Causes the node to process actions in series rather than in parallel.").Default("false").Bool()
 
 	_, err := app.Parse(argsString)
 	if err != nil {
@@ -43,7 +43,7 @@ func parseArgs(argsString []string) (*args, error) {
 		nodeConfig: *nodeConfig,
 		runDir:     *runDir,
 		eventLog:   *eventLog,
-		parallel:   *parallel,
+		serial:     *serial,
 	}, nil
 
 }
@@ -74,7 +74,7 @@ func (a *args) initializeServer() (*sample.Server, error) {
 	return &sample.Server{
 		Logger:           zap.NewExample(),
 		NodeConfig:       nodeConfig,
-		Parallel:         a.parallel,
+		Serial:           a.serial,
 		EventLogPath:     eventLogPath,
 		WALPath:          walDir,
 		RequestStorePath: reqStoreDir,

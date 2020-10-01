@@ -75,13 +75,13 @@ func LoadNodeConfig(f io.Reader) (*NodeConfig, error) {
 	return config, nil
 }
 
-func LoadClientConfig(f io.Reader) (*NodeConfig, error) {
+func LoadClientConfig(f io.Reader) (*ClientConfig, error) {
 	data, err := ioutil.ReadAll(f)
 	if err != nil {
 		return nil, errors.WithMessage(err, "error reading config")
 	}
 
-	config := &NodeConfig{}
+	config := &ClientConfig{}
 	if err = yaml.Unmarshal(data, config); err != nil {
 		return nil, err
 	}

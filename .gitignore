@@ -4,3 +4,4 @@ bootstrap.d/*
 # ignore binaries
 bootstrap
 node
+client
