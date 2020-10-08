@@ -9,6 +9,7 @@ package sample
 import (
 	"context"
 	"crypto/md5"
+	"encoding/binary"
 	"fmt"
 	"os"
 	"time"
@@ -228,13 +229,27 @@ func (al *applicationLog) Apply(entry *pb.QEntry) {
 		if err != nil {
 			panic(err)
 		}
-		fmt.Printf("Applying clientID=%d reqNo=%d with data %s to log\n", request.ClientId, request.ReqNo, reqData)
+		fmt.Printf("Applying clientID=%d reqNo=%d with data of length %d to log\n", request.ClientId, request.ReqNo, len(reqData))
 		al.count++
 	}
 }
 
-func (al *applicationLog) Snap() []byte {
-	return []byte("unimplemented")
+func (al *applicationLog) Snap(networkConfig *pb.NetworkState_Config, clients []*pb.NetworkState_Client) []byte {
+	// XXX, we put the entire configuration into the snapshot value, we should
+	// really hash this, and have some protocol level state transfer, but this is easy for now
+	// and relatively small.  Also note, proto isn't deterministic, but for right now, good enough.
+	data, err := proto.Marshal(&pb.NetworkState{
+		Config:  networkConfig,
+		Clients: clients,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	countValue := make([]byte, 8)
+	binary.LittleEndian.PutUint64(countValue, uint64(al.count))
+
+	return append(countValue, data...)
 }
 
 func mirConfig(nodeConfig *config.NodeConfig) *mirbft.Config {

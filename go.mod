@@ -2,7 +2,7 @@ module github.com/jyellick/mirbft-sample
 
 go 1.14
 
-replace github.com/IBM/mirbft => github.com/jyellick/mirbft v0.0.0-20200914171122-176117de1ea2
+replace github.com/IBM/mirbft => github.com/jyellick/mirbft v0.0.0-20201008041652-edabc2501273
 
 require (
 	github.com/IBM/mirbft v0.0.0-20200820193629-05a8c61dd0f9
