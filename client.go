@@ -54,5 +54,8 @@ func (c *Client) Run() error {
 	}
 	fmt.Printf("\n\nCompleted in %v\n\n", time.Since(start))
 
+	// XXX the close does not seem to wait until sends complete, investigate.
+	time.Sleep(2 * time.Second)
+
 	return nil
 }

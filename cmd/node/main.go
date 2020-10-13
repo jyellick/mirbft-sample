@@ -93,10 +93,12 @@ func main() {
 		kingpin.Fatalf("Error initializing server, %s", err)
 	}
 
-	err = server.Run()
-	if err != nil {
-		kingpin.Fatalf("Application exited abnormally, %s", err)
-	}
+	go func() {
+		err = server.Run()
+		if err != nil {
+			kingpin.Fatalf("Application exited abnormally, %s", err)
+		}
+	}()
 
 	handleSignals(server.Stop)
 

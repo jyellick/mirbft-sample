@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package sample
 
 import (
+	"compress/gzip"
 	"context"
 	"crypto/md5"
 	"encoding/binary"
@@ -15,8 +16,8 @@ import (
 	"time"
 
 	"github.com/IBM/mirbft"
+	"github.com/IBM/mirbft/eventlog"
 	pb "github.com/IBM/mirbft/mirbftpb"
-	"github.com/IBM/mirbft/recorder"
 	"github.com/IBM/mirbft/reqstore"
 	"github.com/IBM/mirbft/simplewal"
 	"github.com/golang/protobuf/proto"
@@ -51,15 +52,11 @@ func (s *Server) Run() error {
 		if err != nil {
 			return errors.WithMessage(err, "could not create event log file")
 		}
-		startTime := time.Now()
-		recorder := recorder.NewInterceptor(
+		recorder := eventlog.NewRecorder(
 			s.NodeConfig.ID,
-			func() int64 {
-				return time.Since(startTime).Milliseconds()
-			},
-			5000,
+			file,
+			eventlog.CompressionLevelOpt(gzip.NoCompression),
 		)
-		go recorder.Drain(file)
 		defer recorder.Stop()
 
 		mirConfig.EventInterceptor = recorder

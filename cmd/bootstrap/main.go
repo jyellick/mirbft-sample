@@ -119,7 +119,7 @@ func (a *args) bootstrap() error {
 				SuspectTicks:         4,
 				NewEpochTimeoutTicks: 8,
 				BatchSize:            20,
-				BufferSize:           1000,
+				BufferSize:           5 * 1024 * 1024,
 			},
 			MirBootstrap: config.MirBootstrap{
 				NumberOfBuckets:    1,
