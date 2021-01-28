@@ -30,7 +30,7 @@ type ClientTransport struct {
 	node *noise.Node
 }
 
-func NewClientTransport(logger *zap.Logger, config *config.ClientConfig) (*ClientTransport, error) {
+func NewClientTransport(logger *zap.SugaredLogger, config *config.ClientConfig) (*ClientTransport, error) {
 	id2addr := make(map[uint64]string)
 	pubkey2nodeid := make(map[noise.PublicKey]uint64)
 	for _, p := range config.Nodes {
@@ -56,14 +56,14 @@ func NewClientTransport(logger *zap.Logger, config *config.ClientConfig) (*Clien
 
 	node, err := noise.NewNode(
 		noise.WithNodePrivateKey(privkey),
-		noise.WithNodeLogger(logger.Named("noise")),
+		noise.WithNodeLogger(logger.Named("noise").Desugar()),
 	)
 	if err != nil {
 		return nil, err
 	}
 
 	return &ClientTransport{
-		logger:  logger.Sugar(),
+		logger:  logger,
 		id:      config.ID,
 		id2addr: id2addr,
 		node:    node,
@@ -111,7 +111,7 @@ type ServerTransport struct {
 
 type Handler func(id uint64, data []byte) error
 
-func NewServerTransport(logger *zap.Logger, config *config.NodeConfig) (*ServerTransport, error) {
+func NewServerTransport(logger *zap.SugaredLogger, config *config.NodeConfig) (*ServerTransport, error) {
 	id2addr := make(map[uint64]string)
 	pubkey2nodeid := make(map[noise.PublicKey]uint64)
 	for _, p := range config.Nodes {
@@ -169,7 +169,7 @@ func NewServerTransport(logger *zap.Logger, config *config.NodeConfig) (*ServerT
 	node, err := noise.NewNode(
 		noise.WithNodePrivateKey(privkey),
 		noise.WithNodeID(id),
-		noise.WithNodeLogger(logger.Named("noise")),
+		noise.WithNodeLogger(logger.Named("noise").Desugar()),
 		noise.WithNodeBindPort(uint16(p)),
 	)
 	if err != nil {
@@ -177,7 +177,7 @@ func NewServerTransport(logger *zap.Logger, config *config.NodeConfig) (*ServerT
 	}
 
 	return &ServerTransport{
-		logger:          logger.Sugar(),
+		logger:          logger,
 		id:              config.ID,
 		id2addr:         id2addr,
 		pubkey2nodeid:   pubkey2nodeid,

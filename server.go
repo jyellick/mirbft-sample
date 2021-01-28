@@ -28,7 +28,7 @@ import (
 )
 
 type Server struct {
-	Logger           *zap.Logger
+	Logger           *zap.SugaredLogger
 	NodeConfig       *config.NodeConfig
 	WALPath          string
 	RequestStorePath string
@@ -39,13 +39,29 @@ type Server struct {
 	exitC chan struct{}
 }
 
+type MirLogAdapter zap.SugaredLogger
+
+func (m *MirLogAdapter) Log(level mirbft.LogLevel, msg string, pairs ...interface{}) {
+	z := (*zap.SugaredLogger)(m)
+	switch level {
+	case mirbft.LevelDebug:
+		z.Debugw(msg, pairs...)
+	case mirbft.LevelInfo:
+		z.Infow(msg, pairs...)
+	case mirbft.LevelWarn:
+		z.Warnw(msg, pairs...)
+	case mirbft.LevelError:
+		z.Errorw(msg, pairs...)
+	}
+}
+
 func (s *Server) Run() error {
 	s.doneC = make(chan struct{})
 	s.exitC = make(chan struct{})
 	defer close(s.exitC)
 
 	mirConfig := mirConfig(s.NodeConfig)
-	mirConfig.Logger = s.Logger
+	mirConfig.Logger = (*MirLogAdapter)(s.Logger)
 
 	if s.EventLogPath != "" {
 		file, err := os.Create(s.EventLogPath)

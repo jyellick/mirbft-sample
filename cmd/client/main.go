@@ -43,7 +43,7 @@ func (a *args) initializeClient() (*sample.Client, error) {
 	}
 
 	return &sample.Client{
-		Logger:       zap.NewExample(),
+		Logger:       zap.NewExample().Sugar(),
 		ClientConfig: clientConfig,
 	}, nil
 }

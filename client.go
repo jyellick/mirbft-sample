@@ -19,7 +19,7 @@ import (
 )
 
 type Client struct {
-	Logger       *zap.Logger
+	Logger       *zap.SugaredLogger
 	ClientConfig *config.ClientConfig
 }
 

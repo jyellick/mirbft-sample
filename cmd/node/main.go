@@ -72,7 +72,7 @@ func (a *args) initializeServer() (*sample.Server, error) {
 	}
 
 	return &sample.Server{
-		Logger:           zap.NewExample(),
+		Logger:           zap.NewExample().Sugar(),
 		NodeConfig:       nodeConfig,
 		Serial:           a.serial,
 		EventLogPath:     eventLogPath,
