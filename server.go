@@ -278,12 +278,9 @@ func mirConfig(nodeConfig *config.NodeConfig) *mirbft.Config {
 }
 
 func initialNetworkState(nodeConfig *config.NodeConfig) *pb.NetworkState {
-	clientIDs := []uint64{}
-	for _, client := range nodeConfig.Clients {
-		clientIDs = append(clientIDs, client.ID)
-	}
 
-	networkState := mirbft.StandardInitialNetworkState(len(nodeConfig.Nodes), clientIDs...)
+	// The sample application relies on the configuration assigning client IDs contiguously starting from 0.
+	networkState := mirbft.StandardInitialNetworkState(len(nodeConfig.Nodes), len(nodeConfig.Clients))
 	networkState.Config.NumberOfBuckets = int32(nodeConfig.MirBootstrap.NumberOfBuckets)
 	networkState.Config.CheckpointInterval = int32(nodeConfig.MirBootstrap.CheckpointInterval)
 	for _, client := range networkState.Clients {
