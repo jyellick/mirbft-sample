@@ -5,7 +5,7 @@ go 1.14
 // replace github.com/IBM/mirbft => github.com/jyellick/mirbft v0.0.0-20201008041652-edabc2501273
 
 require (
-	github.com/IBM/mirbft v0.0.0-20210128153015-7e18f493689f
+	github.com/IBM/mirbft v0.0.0-20210209145710-aacab44a5507
 	github.com/golang/protobuf v1.4.1
 	github.com/ibm/mirbft v0.0.0-20190415184034-d1829758e6fc // indirect
 	github.com/perlin-network/noise v1.1.3

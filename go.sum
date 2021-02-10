@@ -7,6 +7,8 @@ github.com/IBM/mirbft v0.0.0-20200820193629-05a8c61dd0f9 h1:0R7qpL2XlCZT6Hq17vqt
 github.com/IBM/mirbft v0.0.0-20200820193629-05a8c61dd0f9/go.mod h1:MDYMH47aZKa6d5EDQByWtfk9S4K/blgY67BXStO02DE=
 github.com/IBM/mirbft v0.0.0-20210128153015-7e18f493689f h1:zuXQ+B82rdOiOcWlzlNsjlelKFde+lbKE1MuQX5cV00=
 github.com/IBM/mirbft v0.0.0-20210128153015-7e18f493689f/go.mod h1:aqlEAe1nb26Qudfg/WB5FFsJd3x0uZJs6CSSnMOLHAo=
+github.com/IBM/mirbft v0.0.0-20210209145710-aacab44a5507 h1:vkIKDNZMWBv3q/MzkVfGezewJ09ccCHUhwmHnQlY0v4=
+github.com/IBM/mirbft v0.0.0-20210209145710-aacab44a5507/go.mod h1:aqlEAe1nb26Qudfg/WB5FFsJd3x0uZJs6CSSnMOLHAo=
 github.com/OneOfOne/xxhash v1.2.2 h1:KMrpdQIwFcEqXDklaen+P1axHaj9BSKzvpUUfnHldSE=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
 github.com/VictoriaMetrics/fastcache v1.5.7/go.mod h1:ptDBkNMQI4RtmVo8VS/XwRY6RoTu1dAWCbrk+6WsEM8=
