@@ -13,12 +13,12 @@ import (
 	"net"
 	"strconv"
 
-	pb "github.com/IBM/mirbft/mirbftpb"
-	"github.com/golang/protobuf/proto"
+	pb "github.com/hyperledger-labs/mirbft/pkg/pb/msgs"
 	"github.com/jyellick/mirbft-sample/config"
 	"github.com/perlin-network/noise"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/proto"
 )
 
 type ClientTransport struct {

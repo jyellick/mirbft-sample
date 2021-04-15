@@ -9,22 +9,22 @@ package sample
 import (
 	"compress/gzip"
 	"context"
-	"crypto/md5"
+	"crypto"
 	"encoding/binary"
 	"fmt"
 	"os"
 	"time"
 
-	"github.com/IBM/mirbft"
-	"github.com/IBM/mirbft/eventlog"
-	pb "github.com/IBM/mirbft/mirbftpb"
-	"github.com/IBM/mirbft/reqstore"
-	"github.com/IBM/mirbft/simplewal"
-	"github.com/golang/protobuf/proto"
+	"github.com/hyperledger-labs/mirbft"
+	"github.com/hyperledger-labs/mirbft/pkg/eventlog"
+	pb "github.com/hyperledger-labs/mirbft/pkg/pb/msgs"
+	"github.com/hyperledger-labs/mirbft/pkg/reqstore"
+	"github.com/hyperledger-labs/mirbft/pkg/simplewal"
 	"github.com/jyellick/mirbft-sample/config"
 	"github.com/jyellick/mirbft-sample/network"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/proto"
 )
 
 type Server struct {
@@ -63,19 +63,18 @@ func (s *Server) Run() error {
 	mirConfig := mirConfig(s.NodeConfig)
 	mirConfig.Logger = (*MirLogAdapter)(s.Logger)
 
+	var recorder *eventlog.Recorder
 	if s.EventLogPath != "" {
 		file, err := os.Create(s.EventLogPath)
 		if err != nil {
 			return errors.WithMessage(err, "could not create event log file")
 		}
-		recorder := eventlog.NewRecorder(
+		recorder = eventlog.NewRecorder(
 			s.NodeConfig.ID,
 			file,
 			eventlog.CompressionLevelOpt(gzip.NoCompression),
 		)
 		defer recorder.Stop()
-
-		mirConfig.EventInterceptor = recorder
 	}
 
 	wal, err := simplewal.Open(s.WALPath)
@@ -95,33 +94,28 @@ func (s *Server) Run() error {
 	}
 	defer reqStore.Close()
 
-	var node *mirbft.Node
-	if firstStart {
-		node, err = mirbft.StartNewNode(mirConfig, initialNetworkState(s.NodeConfig), []byte("initial-checkpoint-value"))
-		if err != nil {
-			return errors.WithMessage(err, "could not bootstrap node")
-		}
-	} else {
-		node, err = mirbft.RestartNode(mirConfig, wal, reqStore)
-		if err != nil {
-			return errors.WithMessage(err, "could not restart node")
-		}
-	}
-	defer node.Stop()
-
 	// Create transport
 	t, err := network.NewServerTransport(s.Logger, s.NodeConfig)
 	if err != nil {
 		return errors.WithMessage(err, "could not create networking")
 	}
 
-	clientProposers := map[uint64]*mirbft.ClientProposer{}
-	for _, client := range s.NodeConfig.Clients {
-		clientProposer, err := node.ClientProposer(context.Background(), client.ID)
-		if err != nil {
-			return errors.WithMessagef(err, "could not create proposer for client %d\n", client.ID)
-		}
-		clientProposers[client.ID] = clientProposer
+	node, err := mirbft.NewNode(
+		s.NodeConfig.ID,
+		mirConfig,
+		&mirbft.ProcessorConfig{
+			Link:   t,
+			Hasher: crypto.SHA256,
+			App: &application{
+				reqStore: reqStore,
+			}, // TODO, make more useful fixme
+			RequestStore: reqStore,
+			WAL:          wal,
+			Interceptor:  recorder,
+		},
+	)
+	if err != nil {
+		return errors.WithMessage(err, "could not create mirbft node")
 	}
 
 	t.Handle(
@@ -150,14 +144,14 @@ func (s *Server) Run() error {
 				return errors.Errorf("client ID mismatch, claims to be %d but is %d\n", msg.ClientId, clientID)
 			}
 
-			proposer, ok := clientProposers[clientID]
-			if !ok {
+			proposer := node.Client(clientID)
+			if err != nil {
 				return errors.Errorf("unknown client id\n", clientID)
 			}
 
 			fmt.Printf("About to propose %d.%d\n", msg.ClientId, msg.ReqNo)
 
-			err = proposer.Propose(context.Background(), msg)
+			err = proposer.Propose(context.Background(), msg.ReqNo, msg.Data)
 			if err != nil {
 				return errors.WithMessagef(err, "failed to propose message to client %d", clientID)
 			}
@@ -179,50 +173,15 @@ func (s *Server) Run() error {
 	// let the links establish first to reduce logspam...
 	time.Sleep(2 * time.Second)
 
-	processor := &mirbft.Processor{
-		Link:   t,
-		Hasher: md5.New,
-		Log: &applicationLog{
-			reqStore: reqStore,
-		}, // TODO, make more useful fixme
-		Node:         node,
-		RequestStore: reqStore,
-		WAL:          wal,
-	}
-	var process func(*mirbft.Actions) *mirbft.ActionResults
-
-	if s.Serial {
-		process = processor.Process
-	} else {
-		parallelProcessor := mirbft.NewProcessorWorkPool(processor, mirbft.ProcessorWorkPoolOpts{})
-		defer parallelProcessor.Stop()
-		process = parallelProcessor.Process
-	}
-
 	ticker := time.NewTicker(s.NodeConfig.MirRuntime.TickInterval)
 	defer ticker.Stop()
 
 	// Main control loop
-	for {
-		select {
-		case <-ticker.C:
-			err := node.Tick()
-			if err != nil {
-				return err
-			}
-		case actions := <-node.Ready():
-			results := process(&actions)
-			err := node.AddResults(*results)
-			if err != nil {
-				return err
-			}
-		case <-node.Err():
-			_, err := node.Status(context.Background())
-			return err
-		case <-s.doneC:
-			return nil
-		}
+	if firstStart {
+		return node.ProcessAsNewNode(s.doneC, ticker.C, initialNetworkState(s.NodeConfig), []byte("initial-checkpoint-value"))
 	}
+
+	return node.RestartProcessing(s.doneC, ticker.C)
 }
 
 func (s *Server) Stop() {
@@ -230,24 +189,25 @@ func (s *Server) Stop() {
 	<-s.exitC
 }
 
-type applicationLog struct {
-	count    uint
+type application struct {
+	count    uint64
 	reqStore *reqstore.Store
 }
 
-func (al *applicationLog) Apply(entry *pb.QEntry) {
+func (app *application) Apply(entry *pb.QEntry) error {
 	fmt.Printf("Committing an entry for seq_no=%d\n", entry.SeqNo)
 	for _, request := range entry.Requests {
-		reqData, err := al.reqStore.Get(request)
+		reqData, err := app.reqStore.GetRequest(request)
 		if err != nil {
-			panic(err)
+			return errors.WithMessage(err, "could get entry from request store")
 		}
 		fmt.Printf("Applying clientID=%d reqNo=%d with data of length %d to log\n", request.ClientId, request.ReqNo, len(reqData))
-		al.count++
+		app.count++
 	}
+	return nil
 }
 
-func (al *applicationLog) Snap(networkConfig *pb.NetworkState_Config, clients []*pb.NetworkState_Client) []byte {
+func (app *application) Snap(networkConfig *pb.NetworkState_Config, clients []*pb.NetworkState_Client) ([]byte, []*pb.Reconfiguration, error) {
 	// XXX, we put the entire configuration into the snapshot value, we should
 	// really hash this, and have some protocol level state transfer, but this is easy for now
 	// and relatively small.  Also note, proto isn't deterministic, but for right now, good enough.
@@ -256,18 +216,31 @@ func (al *applicationLog) Snap(networkConfig *pb.NetworkState_Config, clients []
 		Clients: clients,
 	})
 	if err != nil {
-		panic(err)
+		return nil, nil, errors.WithMessage(err, "could not marsshal network state")
 	}
 
 	countValue := make([]byte, 8)
-	binary.LittleEndian.PutUint64(countValue, uint64(al.count))
+	binary.BigEndian.PutUint64(countValue, uint64(app.count))
 
-	return append(countValue, data...)
+	return append(countValue, data...), nil, nil
+}
+
+func (app *application) TransferTo(seq uint64, value []byte) (*pb.NetworkState, error) {
+	countValue := value[:8]
+	app.count = binary.BigEndian.Uint64(countValue)
+
+	stateValue := value[8:]
+	ns := &pb.NetworkState{}
+	err := proto.Unmarshal(stateValue, ns)
+	if err != nil {
+		return nil, errors.WithMessage(err, "could not unmarshal checkpoint value to network state")
+	}
+
+	return ns, nil
 }
 
 func mirConfig(nodeConfig *config.NodeConfig) *mirbft.Config {
 	return &mirbft.Config{
-		ID:                   nodeConfig.ID,
 		BatchSize:            nodeConfig.MirRuntime.BatchSize,
 		HeartbeatTicks:       nodeConfig.MirRuntime.HeartbeatTicks,
 		SuspectTicks:         nodeConfig.MirRuntime.SuspectTicks,

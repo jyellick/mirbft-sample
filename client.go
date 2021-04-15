@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"time"
 
-	pb "github.com/IBM/mirbft/mirbftpb"
+	pb "github.com/hyperledger-labs/mirbft/pkg/pb/msgs"
 	"github.com/jyellick/mirbft-sample/config"
 	"github.com/jyellick/mirbft-sample/network"
 	"github.com/pkg/errors"
