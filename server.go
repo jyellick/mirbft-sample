@@ -119,42 +119,55 @@ func (s *Server) Run() error {
 	}
 
 	t.Handle(
-		func(nodeID uint64, data []byte) error {
+		func(nodeID uint64, data []byte) ([]byte, error) {
 			msg := &pb.Msg{}
 			err := proto.Unmarshal(data, msg)
 			if err != nil {
-				return errors.WithMessage(err, "unexpected unmarshaling error")
+				return nil, errors.WithMessage(err, "unexpected unmarshaling error")
 			}
 
 			err = node.Step(context.Background(), nodeID, msg)
 			if err != nil {
-				return errors.WithMessage(err, "failed to step message to mir node")
+				return nil, errors.WithMessage(err, "failed to step message to mir node")
 			}
 
-			return nil
+			return nil, nil
 		},
-		func(clientID uint64, data []byte) error {
+		func(clientID uint64, data []byte) ([]byte, error) {
+			// This simple protocol replies with the next reqno if no request
+			// data is supplied.
+			if len(data) == 0 {
+				proposer := node.Client(clientID)
+				nextReqNo, err := proposer.NextReqNo()
+				if err != nil {
+					return nil, errors.WithMessage(err, "could not get next request number")
+				}
+				encodedNextReqNo := make([]byte, 8)
+				binary.BigEndian.PutUint64(encodedNextReqNo, nextReqNo)
+				return encodedNextReqNo, nil
+			}
+
 			msg := &pb.Request{}
 			err := proto.Unmarshal(data, msg)
 			if err != nil {
-				return errors.WithMessage(err, "unexpected unmarshaling error")
+				return nil, errors.WithMessage(err, "unexpected unmarshaling error")
 			}
 
 			if msg.ClientId != clientID {
-				return errors.Errorf("client ID mismatch, claims to be %d but is %d\n", msg.ClientId, clientID)
+				return nil, errors.Errorf("client ID mismatch, claims to be %d but is %d\n", msg.ClientId, clientID)
 			}
 
 			proposer := node.Client(clientID)
 			if err != nil {
-				return errors.Errorf("unknown client id\n", clientID)
+				return nil, errors.Errorf("unknown client id\n", clientID)
 			}
 
 			err = proposer.Propose(context.Background(), msg.ReqNo, msg.Data)
 			if err != nil {
-				return errors.WithMessagef(err, "failed to propose message to client %d", clientID)
+				return nil, errors.WithMessagef(err, "failed to propose message to client %d", clientID)
 			}
 
-			return nil
+			return nil, nil
 		},
 	)
 

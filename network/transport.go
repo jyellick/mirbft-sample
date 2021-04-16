@@ -80,6 +80,15 @@ func (t *ClientTransport) Close() {
 	t.node.Close()
 }
 
+func (t *ClientTransport) Request(dest uint64, data []byte) ([]byte, error) {
+	addr, ok := t.id2addr[dest]
+	if !ok {
+		panic("Unknown remote")
+	}
+
+	return t.node.Request(context.TODO(), addr, data)
+}
+
 func (t *ClientTransport) Send(dest uint64, msg *pb.Request) error {
 	data, err := proto.Marshal(msg)
 	if err != nil {
@@ -106,7 +115,7 @@ type ServerTransport struct {
 	node        *noise.Node
 }
 
-type Handler func(id uint64, data []byte) error
+type Handler func(id uint64, data []byte) ([]byte, error)
 
 func NewServerTransport(logger *zap.SugaredLogger, config *config.NodeConfig) (*ServerTransport, error) {
 	id2addr := make(map[uint64]string)
@@ -187,14 +196,20 @@ func (t *ServerTransport) Handle(nodeHandler, clientHandler Handler) {
 	t.node.Handle(func(ctx noise.HandlerContext) error {
 		nodeID, ok := t.pubkey2nodeid[ctx.ID().ID]
 		if ok {
-			nodeHandler(nodeID, ctx.Data())
-			return nil
+			result, err := nodeHandler(nodeID, ctx.Data())
+			if err == nil && ctx.IsRequest() {
+				return ctx.Send(result)
+			}
+			return err
 		}
 
 		clientID, ok := t.pubkey2clientid[ctx.ID().ID]
 		if ok {
-			clientHandler(clientID, ctx.Data())
-			return nil
+			result, err := clientHandler(clientID, ctx.Data())
+			if err == nil && ctx.IsRequest() {
+				return ctx.Send(result)
+			}
+			return err
 		}
 
 		t.logger.Warnf("Unknown remote: %+v", ctx.ID())
