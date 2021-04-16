@@ -1,6 +1,6 @@
 # mirbft-sample
 
-This is a small sample application utilizing the [MirBFT library](https://github.com/IBM/mirbft).
+This is a small sample application utilizing the [MirBFT library](https://github.com/hyperledger-labs/mirbft).
 
 **WARNING**  This sample is currently _barely_ functional, and is meant to be instructive, not useful.  **WARNING**
 

@@ -149,14 +149,11 @@ func (s *Server) Run() error {
 				return errors.Errorf("unknown client id\n", clientID)
 			}
 
-			fmt.Printf("About to propose %d.%d\n", msg.ClientId, msg.ReqNo)
-
 			err = proposer.Propose(context.Background(), msg.ReqNo, msg.Data)
 			if err != nil {
 				return errors.WithMessagef(err, "failed to propose message to client %d", clientID)
 			}
 
-			fmt.Printf(" ... done proposing %d.%d\n", msg.ClientId, msg.ReqNo)
 			return nil
 		},
 	)
@@ -195,15 +192,16 @@ type application struct {
 }
 
 func (app *application) Apply(entry *pb.QEntry) error {
-	fmt.Printf("Committing an entry for seq_no=%d\n", entry.SeqNo)
+	fmt.Printf("Committing an entry for seq_no=%d (current count=%d)\n", entry.SeqNo, app.count)
 	for _, request := range entry.Requests {
 		reqData, err := app.reqStore.GetRequest(request)
 		if err != nil {
 			return errors.WithMessage(err, "could get entry from request store")
 		}
-		fmt.Printf("Applying clientID=%d reqNo=%d with data of length %d to log\n", request.ClientId, request.ReqNo, len(reqData))
+		fmt.Printf("  Applying clientID=%d reqNo=%d with data of length %d start %q to log\n", request.ClientId, request.ReqNo, len(reqData), string(reqData[:26]))
 		app.count++
 	}
+
 	return nil
 }
 
@@ -235,6 +233,7 @@ func (app *application) TransferTo(seq uint64, value []byte) (*pb.NetworkState, 
 	if err != nil {
 		return nil, errors.WithMessage(err, "could not unmarshal checkpoint value to network state")
 	}
+	fmt.Printf("Completed state transfer to sequence %d with a total count of %d requests applied\n", seq, app.count)
 
 	return ns, nil
 }

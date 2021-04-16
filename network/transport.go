@@ -80,7 +80,7 @@ func (t *ClientTransport) Close() {
 	t.node.Close()
 }
 
-func (t *ClientTransport) Send(dest uint64, msg *pb.Request) {
+func (t *ClientTransport) Send(dest uint64, msg *pb.Request) error {
 	data, err := proto.Marshal(msg)
 	if err != nil {
 		panic("Failed to marshal outbound message")
@@ -91,10 +91,7 @@ func (t *ClientTransport) Send(dest uint64, msg *pb.Request) {
 		panic("Unknown remote")
 	}
 
-	err = t.node.Send(context.TODO(), addr, data)
-	if err != nil {
-		t.logger.Warnf("Failed to send to %s: %s", addr, err)
-	}
+	return t.node.Send(context.TODO(), addr, data)
 }
 
 type ServerTransport struct {

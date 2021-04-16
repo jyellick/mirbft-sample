@@ -7,7 +7,6 @@ SPDX-License-Identifier: Apache-2.0
 package sample
 
 import (
-	"bytes"
 	"fmt"
 	"time"
 
@@ -37,10 +36,12 @@ func (c *Client) Run() error {
 	defer t.Close()
 
 	start := time.Now()
-	for i := 0; i < 5000; i++ {
+	for i := 0; i < 50000; i++ {
 
-		data := make([]byte, 100*1024)
-		fmt.Fprintf(bytes.NewBuffer(data), "my-request-%d.%d.data", c.ClientConfig.ID, i)
+		data := make([]byte, 10*1024)
+		for i, c := range fmt.Sprintf("data-%010d.%010d", c.ClientConfig.ID, i) {
+			data[i] = byte(c)
+		}
 
 		req := &pb.Request{
 			ClientId: c.ClientConfig.ID,
@@ -49,7 +50,11 @@ func (c *Client) Run() error {
 		}
 
 		for _, node := range c.ClientConfig.Nodes {
-			t.Send(node.ID, req)
+			err := t.Send(node.ID, req)
+			if err != nil {
+				fmt.Printf("Error sending client request %d: %s", i, err)
+				return errors.WithMessage(err, "failed to submit client req")
+			}
 		}
 	}
 	fmt.Printf("\n\nCompleted in %v\n\n", time.Since(start))
