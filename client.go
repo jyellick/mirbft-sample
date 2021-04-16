@@ -22,7 +22,7 @@ type Client struct {
 	ClientConfig *config.ClientConfig
 }
 
-func (c *Client) Run() error {
+func (c *Client) Run(requestCount uint64, requestSize uint16) error {
 	// Create transport
 	t, err := network.NewClientTransport(c.Logger, c.ClientConfig)
 	if err != nil {
@@ -36,16 +36,16 @@ func (c *Client) Run() error {
 	defer t.Close()
 
 	start := time.Now()
-	for i := 0; i < 50000; i++ {
+	for i := uint64(0); i < requestCount; i++ {
 
-		data := make([]byte, 10*1024)
+		data := make([]byte, requestSize)
 		for i, c := range fmt.Sprintf("data-%010d.%010d", c.ClientConfig.ID, i) {
 			data[i] = byte(c)
 		}
 
 		req := &pb.Request{
 			ClientId: c.ClientConfig.ID,
-			ReqNo:    uint64(i),
+			ReqNo:    i,
 			Data:     data,
 		}
 

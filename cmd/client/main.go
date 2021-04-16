@@ -19,11 +19,15 @@ import (
 
 type args struct {
 	clientConfig *os.File
+	requestCount uint64
+	requestSize  uint16
 }
 
 func parseArgs(argsString []string) (*args, error) {
 	app := kingpin.New("client", "A small sample client for the mirbft-sample application.")
 	clientConfig := app.Flag("clientConfig", "The YAML file containing this client's config (as generated via bootstrap).").Required().File()
+	requestCount := app.Flag("requestCount", "The total number of requests to send").Default("10000").Uint64()
+	requestSize := app.Flag("requestSize", "The size in bytes for each request (must be at least 26 bytes)").Default("10240").Uint16()
 
 	_, err := app.Parse(argsString)
 	if err != nil {
@@ -32,6 +36,8 @@ func parseArgs(argsString []string) (*args, error) {
 
 	return &args{
 		clientConfig: *clientConfig,
+		requestCount: *requestCount,
+		requestSize:  *requestSize,
 	}, nil
 
 }
@@ -60,7 +66,7 @@ func main() {
 		kingpin.Fatalf("Error initializing client, %s", err)
 	}
 
-	err = client.Run()
+	err = client.Run(args.requestCount, args.requestSize)
 	if err != nil {
 		kingpin.Fatalf("Client exited abnormally, %s", err)
 	}
