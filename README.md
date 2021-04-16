@@ -2,7 +2,7 @@
 
 This is a small sample application utilizing the [MirBFT library](https://github.com/hyperledger-labs/mirbft).
 
-**WARNING**  This sample is currently _barely_ functional, and is meant to be instructive, not useful.  **WARNING**
+This sample is currently reasonably functional, but has not been tested extensively.  It is meant to be instructive, and is based on a development level of the mirbft library, so is not stable.
 
 That being said, if you'd like to use it, you may do the following:
 
@@ -31,4 +31,16 @@ mkdir -p bootstrap.d
 
 You can alternatively execute `./start.sh` which will perform steps (1), (2), and (3) for you.
 
-Note.  As warned, there are currently unsquashed bugs, and unimplemented features, and it's been observed that this network will often break and stop working after some period of time.  That's expected, please don't report it as a bug.  Feel free to submit PRs for documentation improvements, usability improvements, etc. but work to find and address these bugs is underway in the main repository with automated testing frameworks.
+You may want to watch at least one node log via something like:
+
+```
+tail -f bootstrap.d/node1/run/node.log
+```
+
+4. You may now use the provided sample client to inject requests into the system such as:
+
+```
+./client --clientConfig bootstrap.d/client0/config/client-config.yaml
+```
+
+By default, the client will attempt to inject an additional 10,000 requests of size 10kb each into the system.  It may be run multiple times.
